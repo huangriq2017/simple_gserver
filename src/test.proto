@@ -1,0 +1,31 @@
+message msg{
+  repeated uint32 list = 1;
+  required uint32 int = 2;
+  optional uint32 opt = 3;
+}
+message msg1{
+  repeated uint32 list = 1;
+  required uint32 int = 2;
+  optional uint32 opt = 3;
+}
+message msg2{
+  repeated uint32 list = 1;
+  required uint32 int = 2;
+  optional uint32 opt = 3;
+}
+message msg3{
+  repeated uint32 list = 1;
+  required uint32 int = 2;
+  optional uint32 opt = 3;
+}
+message msg4{
+  repeated uint32 list = 1;
+  required uint32 int = 2;
+  optional uint32 opt = 3;
+}
+message msg5{
+  repeated uint32 list = 1;
+  required uint32 int = 2;
+  optional uint32 opt = 3;
+}
+
