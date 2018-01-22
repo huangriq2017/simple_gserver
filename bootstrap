@@ -1,0 +1,187 @@
+#! /bin/bash
+
+#================== 参数部分 =====================
+dir=`dirname $0`
+
+name="gserver@127.0.0.1"
+
+cookie=huangriq
+
+#预设变量
+
+# ================函数部分 =========================
+
+function GREEN()
+{
+  echo -e "\033[40;32m$*\033[40;0m"
+}
+
+function RED()
+{
+  echo -e "\033[40;31m$*\033[40;0m"
+}
+
+function parse_argument()
+{
+  while getopts ":hs:b" opt
+  do
+    case $opt in
+      'b')
+      block=true
+      ;;
+      's')
+      st=$OPTARG
+      ;;
+      'h')
+      helpt
+      exit 0
+      ;;
+      *)
+      helpt
+      exit 1
+      ;;
+    esac
+  done
+}
+
+function helpt()
+{
+  echo "usage: ${BASH_SOURCE[0]} {start|stop|restart|status|debug|etop|update|execute} [options]"
+  echo "start     启动"
+  echo "stop      关闭"
+  echo "restart   重启"
+  echo "status    状态"
+  echo "debug     调试"
+  echo "etop      调优"
+  echo "update    热更新文件"
+  echo "execute   热更新函数"
+  echo "options:"
+  echo "-b 阻塞，start有效"
+  echo "-s 调优类型 etop 有效"
+  echo "-h 当前文档"
+}
+
+function check_ps()
+{
+  return `ps xf | grep "\-name \<$1\>" | grep -cv "grep"`
+}
+
+function start()
+{
+  GREEN "启动$1......."
+  if ! check_ps $1; then
+    RED "$1已经启动，启动失败！！！"
+    exit 1
+  fi
+
+  if [ $block ]; then
+    detach=""
+  else
+    detach="-detached -noshell"
+  fi
+
+
+  file=.node_$1
+  > $file
+  erl -smp auto $detach +K true +P 250000 +h 10240 +scl false +swt low +swct eager +sbwt none +sbt db -env ERL_MAX_ETS_TABLES 200000 -name $name -setcookie $cookie -pz $dir/ebin/ -eval "try ok = application:start(gserver), file:delete(\"$file\") catch _:_ -> init:stop() end"
+
+  while :
+  do 
+    if check_ps $1; then
+      RED "启动失败！！！."
+      break
+    else 
+      if [ ! -e "$file" ]; then
+        GREEN "启动成功"
+        break
+      else 
+        sleep 1s
+      fi
+    fi
+  done
+}
+
+function stop()
+{
+  RED "关闭$1....."
+  erl -noshell -name stop_${1} -setcookie $cookie -hidden -evel "rpc:call('$1', application, stop, [gserver], infinity)" -eval "rpc:call('$1', init, stop, [])" -eval "init:stop()"
+  sleep 1s
+  if check_ps $1; then
+    GREEN "关闭成功"
+  else
+    RED "关闭失败！！！."
+  fi
+}
+
+function status() 
+{
+  if check_ps $1; then
+    echo "$1 stopped"
+  else 
+    GREEN "$1 running"
+  fi
+}
+
+function debug()
+{
+  echo "进入调试模式......."
+  seconds=`date +%s`
+  erl -name debug_${seconds}_${1} -setcookie $cookie -hidden -remsh $1 -pz $dir/ebin/
+}
+
+function etop
+{
+  echo "进入调优模式......"
+  seconds=`date +%s`
+  erl -name etop_${seconds}_${1} -setcookie $cookie -hidden -s etop -s erlang halt -node $1 -lines 32 interval 3 -accumulate true -sort ${st:-msg_q} -output text -tracing off
+}
+
+function update()
+{
+  erl -noshell -name update_${name} -setcookie $cookie -hidden -eval "Res=rpc:call('$name', adm, load, [[$*]]), io:format(\"~w~n\", [Res]), init:stop()"
+}
+
+function execute()
+{
+  erl -noshell -name update_cmd_${name} -setcookie $cookie -hidden -eval "Res=rpc:call('$name', adm, exec, [fun() -> $* end]), io:format(\"~w~n\", [Res]), init:stop()"
+}
+
+# =========================主体逻辑=============================
+func=$1
+shift 1
+parse_argument $@
+
+case $func in
+  'start')
+  start $name
+  ;;
+  'stop')
+  stop $name
+  ;;
+  'restart')
+  stop $name
+  start $name
+  ;;
+  'status')
+  status $name
+  ;;
+  'debug')
+  debug $name
+  ;;
+  'etop')
+  etop $name
+  ;;
+  'update')
+  update $@
+  ;;
+  'execute')
+  execute $@
+  ;;
+  *)
+  helpt
+  exit 1
+  ;;
+esac
+
+exit 0
+}
