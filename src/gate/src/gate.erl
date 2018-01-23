@@ -37,22 +37,21 @@
      ]).
 %% 
  -include("gate.hrl").
-%% 
-%% 
-%% -spec open(Sock :: port(), UserData :: term()) -> no_return().
-open(Sock, _UserData) -> Sock.
-%%   stdlib:process_tag(?MODULE),
-%%   %% SOCK信息
-%%   {ok, {LocalIP, LocalPort}} = inet:sockname(Sock),
-%%   {ok, {PeerIP, PeerPort}}   = inet:peername(Sock),
-%% gate_data:set_sockaddr(#b_sockaddr{sock = Sock, local_ip = LocalIP, local_port = LocalPort,
-%%               peer_ip = PeerIP, peer_port = PeerPort}),
-%%   gate_data:set_seq(0),
-%%   gate_data:set_buff(<<>>),
-%%   gate_data:set_heartbeat(0),
-%%   gate_data:set_timeout_count(0),
-%%   gate_data:set_packet_count(dict:new()),
-%%   gate_data:set_packet_unexpected([]),
+ -include("test.hrl").
+-spec open(Sock :: port(), UserData :: term()) -> no_return().
+open(Sock, _UserData) -> 
+   stdlib:process_tag(?MODULE),
+  %% SOCK信息
+  {ok, {LocalIP, LocalPort}} = inet:sockname(Sock),
+  {ok, {PeerIP, PeerPort}}   = inet:peername(Sock),
+  gate_data:set_sockaddr(#b_sockaddr{sock = Sock, local_ip = LocalIP, local_port = LocalPort,
+              peer_ip = PeerIP, peer_port = PeerPort}),
+  gate_data:set_seq(0),
+  gate_data:set_buff(<<>>),
+  gate_data:set_heartbeat(0),
+  gate_data:set_timeout_count(0),
+  gate_data:set_packet_count(dict:new()),
+  gate_data:set_packet_unexpected([]),
 %% 
 %%   %% 启动定时器
 %%   stdlib:mh_set({?MODULE, cmp_loop}, {?MODULE, cmp_add}),
@@ -63,23 +62,25 @@ open(Sock, _UserData) -> Sock.
 %%   timermgr:send_interval(?LOOP, self(), ?MODULE, loop),
 %%   
 %%   ?WARN("SOCKET CREATE:~w, ~w:~w => ~w:~w", [Sock, LocalIP, LocalPort, PeerIP, PeerPort]).
+  ok.
 %% 
 %% 
-%% -spec close(Sock :: port(), Reason :: term()) -> no_return().
-close(Sock, Reason) -> {Sock, Reason}.
-%%   ?WARN("SOCKET CLOSE :~w,~w", [Sock, Reason])
+-spec close(Sock :: port(), Reason :: term()) -> no_return().
+close(Sock, Reason) -> 
+   ?WARN("SOCKET CLOSE :~w,~w", [Sock, Reason]).
+ 
+-spec recv(Sock :: port(), Msg :: binary()) -> no_return().
+recv(_Sock, Msg) -> 
+   ?WARN("server recv msg ~w", [Msg]),
+   handle(<<(gate_data:get_buff())/binary, Msg/binary>>).
 %% 
-%% -spec recv(Sock :: prot(), Msg :: binary()) -> no_return().
-recv(_Sock, Msg) -> Msg.
-%%   handle(<<(gate_data:get_buff())/binary, Msg/binary>>).
+message(Msg) -> 
+   handle_msg(Msg).
 %% 
-message(Msg) -> Msg.
-%%   handle_msg(Msg).
+message_return(Msg) -> 
+   handle_msg(Msg).
 %% 
-message_return(Msg) -> Msg.
-%%   handle_msg(Msg).
-%% 
-stop(Reason) -> Reason.
+stop(Reason) -> 
 %%   case gate_data:get_rolepid() of
 %%     undefined ->
 %%       ignore;
@@ -100,29 +101,28 @@ stop(Reason) -> Reason.
 %%     Ref ->
 %%       erlang:demonitor(Ref, [flush])
 %%   end,
-%%   stdin:sleep(800),
-%%   stdin:stop(Reason).
+  stdin:sleep(800),
+  stdin:stop(Reason).
 %% 
-%% shutdown(Reason) -> Reason.
+shutdown(Reason) -> 
 %%   gate_data:set_rolepid(undefined),
 %%   gate_data:set_roleref(undefined),
-%%   stop(Reason).
-%% 
-%% 
-%% handle(Msg0) ->
-%%   case pt:read({binary, Msg0}) of
-%%     {Msg1, Msg2} ->
-%%       {Hdr, _} = pt:read({m_hdr, Msg1}),
-%%       #m_hdr{module = Module, method = Method} = Hdr,
-%% 
-%%       case catch parse(Hdr, Msg1) of
-%%         {ok, RD} ->
+  stop(Reason).
+ 
+ 
+handle(Msg0) ->
+   case pt:read({binary, Msg0}) of
+     {Msg1, Msg2} ->
+       {Module, Method, Msg} = pt:read({tos, Msg1}),
+       case catch parse(Msg) of
+         {ok, RD} ->
 %%           gate_data:set_packet_time(stdin:time()),
-%%           add_packet_count(Module, Method),
-%%           message(RD),
-%%           handle(Msg2);
-%%         {error, Err} ->
-%%           debugmgr:print_msg(Hdr, "[~w]RECV:~w", [gate_data:get_roleid(), Hdr),
+           add_packet_count(Module, Method),
+           ?WARN("RD ~w", [RD]),
+           message(RD),
+           ?WARN("finish recv ~w", [RD]),
+           handle(Msg2);
+         {error, _Err} ->
 %%           case lists:member(Err, "FATAL_ERR") of
 %%             true ->
 %%               ?ERROR("解析数据错误：~w,~w,~w", [Err, Hdr, Msg1]);
@@ -137,15 +137,16 @@ stop(Reason) -> Reason.
 %%               gate_data:set_buff(Msg2),
 %%               stdlib:send_error(Module, Method, Err)
 %%           end;
-%%         _Err        ->
-%%           debugmgr:print_msg(Hdr, "[~w]RECV:~w", [gate_data:get_roleid(), Hdr]),
-%%           ?ERROR("解析数据错误:~w,~w,~w", [_Err, Hdr, Msg1]),
-%%           get_data:set_buff(Msg2),
+           stop(0);
+         _Err        ->
+           get_data:set_buff(Msg2)
 %%           stdlib:send_error(Module, Method, ?KERRNO_SYSTEM)
-%%       end;
-%%     _ ->
-%%       gate_data:set_buff(Msg0)
-%%   end.
+       end;
+     _ ->
+       gate_data:set_buff(Msg0)
+   end.
+
+parse(Msg) -> {ok, Msg}.
 %% 
 %% perse(#m_hdr{seq = Seq, module = Module, method = Method}, Msg) ->
 %%   %% 检查序列号
@@ -217,11 +218,11 @@ stop(Reason) -> Reason.
 %% check_checksum(<<N:16/little-unsigned-integer-unit:1, V1/little-unsigned-binary-unit:8>>, Sum) -
 %%   check_checksum(V1, N + Sum).
 %% 
-%% add_packet_count(Module, Method) ->
-%%   D0 = gate_data:get_packet_count(),
-%%   D1 = dict:update_counter({Module, 0}, 1, D0),
-%%   D2 = dict:update_counter({Module, Method}, 1, D1),
-%%   gate_data:set_packet_count(D2).
+add_packet_count(Module, Method) ->
+  D0 = gate_data:get_packet_count(),
+  D1 = dict:update_counter({Module, 0}, 1, D0),
+  D2 = dict:update_counter({Module, Method}, 1, D1),
+  gate_data:set_packet_count(D2).
 %% 
 %% check_packet() ->
 %%   mh_add_intvl(check_packet, f_etc:find(check_packet_intvl), undefined),
@@ -326,69 +327,71 @@ stop(Reason) -> Reason.
 %%   stdlib:mh_loop(2, Time),
 %%   ok.
 %% 
-%% %% 消息处理
-%% handle_msg({'DOWN', Ref, process, PID, _Info}) ->
-%%   case gate_data:get_roleref() =:= Ref andalso gate_data:get_rolepid() =:= PID of
-%%     true ->
-%%       ?ERROR("玩家进程崩溃:~w,~w,~w", [PID, Ref, _Info]),
-%%       shutdown(?KERRNO_SERVICING);
-%%     false ->
-%%       ?ERROR("收到其他进程崩溃的消息:~w, ~w, ~w", [Ref, PID, _Info])
-%%   end;
-%% 
+%% 消息处理
+handle_msg({'DOWN', Ref, process, PID, _Info}) ->
+  case gate_data:get_roleref() =:= Ref andalso gate_data:get_rolepid() =:= PID of
+    true ->
+      ?ERROR("玩家进程崩溃:~w,~w,~w", [PID, Ref, _Info]),
+      shutdown(0);
+    false ->
+      ?ERROR("收到其他进程崩溃的消息:~w, ~w, ~w", [Ref, PID, _Info])
+  end;
+
 %% handle_msg({login, RoleID}) ->
 %%   gate_data:set_roleid(RoleID),
 %%   yes = globalmgr:register_name(stdlib:gate_procname(RoleID), self());
-%% 
-%% handle_msg(shutdown) ->
-%%   shutdown(shutdown);
-%% 
-%% handle_msg({async_close, Reason}) ->
-%%   shutdown(Reason);
-%% 
+
+handle_msg(shutdown) ->
+  shutdown(shutdown);
+
+handle_msg({async_close, Reason}) ->
+  shutdown(Reason);
+
 %% handle_msg(loop) ->
 %%   ?CATCH(loop(stdin:time()));
-%% 
-%% handle_msg(Msg) ->
-%%   case gate_data:get_rolepid() of
-%%     undefined ->
-%%       case is_record(Msg, m_system_auth_tos) of
-%%         true ->
-%%           #m_system_auth_tos{account_name = AccountName} = Msg,
-%%           Sockaddr = gate_data:get_sockaddr(),
-%%           case role:start(Sockaddr, self(), Msg) of
-%%             {ok, PID}   ->
-%%               bind_rolepid(PID, AccountName);
-%%             {error, {already_started, PID}} ->
-%%               case stdin:call(PID, [readirect, mod_system, {auth, Sockaddr, self(), Msg}}) of
-%%                 ok ->
-%%                   bind_rolepid(PID, AccountName);
-%%                 {error, {bad_return_value, {error, Err}}} ->
-%%                   stdlib:send_error(#m_system_auth_toc{}, Err;
-%%                 Err ->
-%%                   ?ERROR("绑定玩家进程失败:~w,~s", [Err, AccountName]),
-%%                   stdin:sleep(300),
-%%                   handle_msg(Msg)
-%%               end;
-%%             {error, {bad_return_value, {error, Err}}} ->
-%%               stdlib:send_error(#m_system_auth_toc{}, Err);
-%%             Err   ->
-%%               ?ERROR("启动玩家进程失败:~w, ~s", [Err, AccountName]),
-%%               stdlib:send(#m_system_auth_toc(errno = ?KERRNO_SYSTEM})
-%%           end;
-%%         false ->
-%%           ?ERROR("未论证前， 不能发消息:~w", [Msg]),
-%%           ignore
-%%       end;
-%%     PID ->
-%%       case is_record(Msg, m_system_heartbeat_tos) of
-%%         true ->
-%%           check_heartbeat(Msg);
-%%         false ->
-%%           stdin:send(PID, {gate, self(), Msg})
-%%       end
-%%   end.
-%% 
+
+handle_msg(Msg) ->
+  ?WARN("recv proto:~w ", [Msg]),
+  stdlib:send(#m_login_toc{id = 1, name = "rbt_1"}).
+%%  case gate_data:get_rolepid() of
+%%    undefined ->
+%%      case is_record(Msg, m_system_auth_tos) of
+%%        true ->
+%%          #m_system_auth_tos{account_name = AccountName} = Msg,
+%%          Sockaddr = gate_data:get_sockaddr(),
+%%          case role:start(Sockaddr, self(), Msg) of
+%%            {ok, PID}   ->
+%%              bind_rolepid(PID, AccountName);
+%%            {error, {already_started, PID}} ->
+%%              case stdin:call(PID, [readirect, mod_system, {auth, Sockaddr, self(), Msg}}) of
+%%                ok ->
+%%                  bind_rolepid(PID, AccountName);
+%%                {error, {bad_return_value, {error, Err}}} ->
+%%                  stdlib:send_error(#m_system_auth_toc{}, Err;
+%%                Err ->
+%%                  ?ERROR("绑定玩家进程失败:~w,~s", [Err, AccountName]),
+%%                  stdin:sleep(300),
+%%                  handle_msg(Msg)
+%%              end;
+%%            {error, {bad_return_value, {error, Err}}} ->
+%%              stdlib:send_error(#m_system_auth_toc{}, Err);
+%%            Err   ->
+%%              ?ERROR("启动玩家进程失败:~w, ~s", [Err, AccountName]),
+%%              stdlib:send(#m_system_auth_toc(errno = ?KERRNO_SYSTEM})
+%%          end;
+%%        false ->
+%%          ?ERROR("未论证前， 不能发消息:~w", [Msg]),
+%%          ignore
+%%      end;
+%%    PID ->
+%%      case is_record(Msg, m_system_heartbeat_tos) of
+%%        true ->
+%%          check_heartbeat(Msg);
+%%        false ->
+%%          stdin:send(PID, {gate, self(), Msg})
+%%      end
+%%  end.
+ 
 %% bind_rolepid(PID, AccountName) ->
 %%   ?WARN("绑定玩家进程:~w,~s", [PID, AccountName]),
 %%   Ref = monitor(process, PID),

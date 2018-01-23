@@ -28,4 +28,11 @@ message msg5{
   required uint32 int = 2;
   optional uint32 opt = 3;
 }
+message m_login_tos{
+  required uint32 id = 1;
+}
 
+message m_login_toc{
+  required uint32 id = 1;
+  required string name = 2;
+}

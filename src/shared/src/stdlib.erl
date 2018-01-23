@@ -98,3 +98,9 @@ set_mh(Mh) ->
 get_mh() ->
   get('__mh__').
 
+
+send(Msg) ->
+  Bin = pt:write(Msg),
+  Sock = gate_data:get_socket(),
+  ?WARN("send ~w", [{Sock, Msg, Bin}]),
+  ?CATCH(erlang:port_command(Sock, Bin, [force])).

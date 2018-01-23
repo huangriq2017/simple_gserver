@@ -34,15 +34,17 @@
 -type msg5() :: #msg5{}.
 -type msg4() :: #msg4{}.
 -type msg1() :: #msg1{}.
+-type m_login_toc() :: #m_login_toc{}.
+-type m_login_tos() :: #m_login_tos{}.
 -type msg() :: #msg{}.
 -type msg3() :: #msg3{}.
--export_type(['msg2'/0, 'msg5'/0, 'msg4'/0, 'msg1'/0, 'msg'/0, 'msg3'/0]).
+-export_type(['msg2'/0, 'msg5'/0, 'msg4'/0, 'msg1'/0, 'm_login_toc'/0, 'm_login_tos'/0, 'msg'/0, 'msg3'/0]).
 
--spec encode_msg(#msg2{} | #msg5{} | #msg4{} | #msg1{} | #msg{} | #msg3{}) -> binary().
+-spec encode_msg(#msg2{} | #msg5{} | #msg4{} | #msg1{} | #m_login_toc{} | #m_login_tos{} | #msg{} | #msg3{}) -> binary().
 encode_msg(Msg) -> encode_msg(Msg, []).
 
 
--spec encode_msg(#msg2{} | #msg5{} | #msg4{} | #msg1{} | #msg{} | #msg3{}, list()) -> binary().
+-spec encode_msg(#msg2{} | #msg5{} | #msg4{} | #msg1{} | #m_login_toc{} | #m_login_tos{} | #msg{} | #msg3{}, list()) -> binary().
 encode_msg(Msg, Opts) ->
     case proplists:get_bool(verify, Opts) of
       true -> verify_msg(Msg, Opts);
@@ -54,6 +56,8 @@ encode_msg(Msg, Opts) ->
       #msg5{} -> e_msg_msg5(Msg, TrUserData);
       #msg4{} -> e_msg_msg4(Msg, TrUserData);
       #msg1{} -> e_msg_msg1(Msg, TrUserData);
+      #m_login_toc{} -> e_msg_m_login_toc(Msg, TrUserData);
+      #m_login_tos{} -> e_msg_m_login_tos(Msg, TrUserData);
       #msg{} -> e_msg_msg(Msg, TrUserData);
       #msg3{} -> e_msg_msg3(Msg, TrUserData)
     end.
@@ -156,6 +160,32 @@ e_msg_msg1(#msg1{list = F1, int = F2, opt = F3}, Bin,
 	   end
     end.
 
+e_msg_m_login_toc(Msg, TrUserData) ->
+    e_msg_m_login_toc(Msg, <<>>, TrUserData).
+
+
+e_msg_m_login_toc(#m_login_toc{id = F1, name = F2}, Bin,
+		  TrUserData) ->
+    B1 = begin
+	   TrF1 = id(F1, TrUserData),
+	   e_varint(TrF1, <<Bin/binary, 8>>)
+	 end,
+    begin
+      TrF2 = id(F2, TrUserData),
+      e_type_string(TrF2, <<B1/binary, 18>>)
+    end.
+
+e_msg_m_login_tos(Msg, TrUserData) ->
+    e_msg_m_login_tos(Msg, <<>>, TrUserData).
+
+
+e_msg_m_login_tos(#m_login_tos{id = F1}, Bin,
+		  TrUserData) ->
+    begin
+      TrF1 = id(F1, TrUserData),
+      e_varint(TrF1, <<Bin/binary, 8>>)
+    end.
+
 e_msg_msg(Msg, TrUserData) ->
     e_msg_msg(Msg, <<>>, TrUserData).
 
@@ -240,6 +270,11 @@ e_field_msg3_list([Elem | Rest], Bin, TrUserData) ->
     e_field_msg3_list(Rest, Bin3, TrUserData);
 e_field_msg3_list([], Bin, _TrUserData) -> Bin.
 
+e_type_string(S, Bin) ->
+    Utf8 = unicode:characters_to_binary(S),
+    Bin2 = e_varint(byte_size(Utf8), Bin),
+    <<Bin2/binary, Utf8/binary>>.
+
 e_varint(N, Bin) when N =< 127 -> <<Bin/binary, N>>;
 e_varint(N, Bin) ->
     Bin2 = <<Bin/binary, (N band 127 bor 128)>>,
@@ -283,6 +318,22 @@ decode_msg(Bin, MsgName, Opts) when is_binary(Bin) ->
 		error({gpb_error,
 		       {decoding_failure,
 			{Bin, msg1, {Class, Reason, StackTrace}}}})
+	  end;
+      m_login_toc ->
+	  try d_msg_m_login_toc(Bin, TrUserData) catch
+	    Class:Reason ->
+		StackTrace = erlang:get_stacktrace(),
+		error({gpb_error,
+		       {decoding_failure,
+			{Bin, m_login_toc, {Class, Reason, StackTrace}}}})
+	  end;
+      m_login_tos ->
+	  try d_msg_m_login_tos(Bin, TrUserData) catch
+	    Class:Reason ->
+		StackTrace = erlang:get_stacktrace(),
+		error({gpb_error,
+		       {decoding_failure,
+			{Bin, m_login_tos, {Class, Reason, StackTrace}}}})
 	  end;
       msg ->
 	  try d_msg_msg(Bin, TrUserData) catch
@@ -980,6 +1031,219 @@ skip_64_msg1(<<_:64, Rest/binary>>, Z1, Z2, F@_1, F@_2,
     dfp_read_field_def_msg1(Rest, Z1, Z2, F@_1, F@_2, F@_3,
 			    TrUserData).
 
+d_msg_m_login_toc(Bin, TrUserData) ->
+    dfp_read_field_def_m_login_toc(Bin, 0, 0,
+				   id(undefined, TrUserData),
+				   id(undefined, TrUserData), TrUserData).
+
+dfp_read_field_def_m_login_toc(<<8, Rest/binary>>, Z1,
+			       Z2, F@_1, F@_2, TrUserData) ->
+    d_field_m_login_toc_id(Rest, Z1, Z2, F@_1, F@_2,
+			   TrUserData);
+dfp_read_field_def_m_login_toc(<<18, Rest/binary>>, Z1,
+			       Z2, F@_1, F@_2, TrUserData) ->
+    d_field_m_login_toc_name(Rest, Z1, Z2, F@_1, F@_2,
+			     TrUserData);
+dfp_read_field_def_m_login_toc(<<>>, 0, 0, F@_1, F@_2,
+			       _) ->
+    #m_login_toc{id = F@_1, name = F@_2};
+dfp_read_field_def_m_login_toc(Other, Z1, Z2, F@_1,
+			       F@_2, TrUserData) ->
+    dg_read_field_def_m_login_toc(Other, Z1, Z2, F@_1, F@_2,
+				  TrUserData).
+
+dg_read_field_def_m_login_toc(<<1:1, X:7, Rest/binary>>,
+			      N, Acc, F@_1, F@_2, TrUserData)
+    when N < 32 - 7 ->
+    dg_read_field_def_m_login_toc(Rest, N + 7,
+				  X bsl N + Acc, F@_1, F@_2, TrUserData);
+dg_read_field_def_m_login_toc(<<0:1, X:7, Rest/binary>>,
+			      N, Acc, F@_1, F@_2, TrUserData) ->
+    Key = X bsl N + Acc,
+    case Key of
+      8 ->
+	  d_field_m_login_toc_id(Rest, 0, 0, F@_1, F@_2,
+				 TrUserData);
+      18 ->
+	  d_field_m_login_toc_name(Rest, 0, 0, F@_1, F@_2,
+				   TrUserData);
+      _ ->
+	  case Key band 7 of
+	    0 ->
+		skip_varint_m_login_toc(Rest, 0, 0, F@_1, F@_2,
+					TrUserData);
+	    1 ->
+		skip_64_m_login_toc(Rest, 0, 0, F@_1, F@_2, TrUserData);
+	    2 ->
+		skip_length_delimited_m_login_toc(Rest, 0, 0, F@_1,
+						  F@_2, TrUserData);
+	    3 ->
+		skip_group_m_login_toc(Rest, Key bsr 3, 0, F@_1, F@_2,
+				       TrUserData);
+	    5 ->
+		skip_32_m_login_toc(Rest, 0, 0, F@_1, F@_2, TrUserData)
+	  end
+    end;
+dg_read_field_def_m_login_toc(<<>>, 0, 0, F@_1, F@_2,
+			      _) ->
+    #m_login_toc{id = F@_1, name = F@_2}.
+
+d_field_m_login_toc_id(<<1:1, X:7, Rest/binary>>, N,
+		       Acc, F@_1, F@_2, TrUserData)
+    when N < 57 ->
+    d_field_m_login_toc_id(Rest, N + 7, X bsl N + Acc, F@_1,
+			   F@_2, TrUserData);
+d_field_m_login_toc_id(<<0:1, X:7, Rest/binary>>, N,
+		       Acc, _, F@_2, TrUserData) ->
+    {NewFValue, RestF} = {X bsl N + Acc, Rest},
+    dfp_read_field_def_m_login_toc(RestF, 0, 0, NewFValue,
+				   F@_2, TrUserData).
+
+d_field_m_login_toc_name(<<1:1, X:7, Rest/binary>>, N,
+			 Acc, F@_1, F@_2, TrUserData)
+    when N < 57 ->
+    d_field_m_login_toc_name(Rest, N + 7, X bsl N + Acc,
+			     F@_1, F@_2, TrUserData);
+d_field_m_login_toc_name(<<0:1, X:7, Rest/binary>>, N,
+			 Acc, F@_1, _, TrUserData) ->
+    {NewFValue, RestF} = begin
+			   Len = X bsl N + Acc,
+			   <<Utf8:Len/binary, Rest2/binary>> = Rest,
+			   {unicode:characters_to_list(Utf8, unicode), Rest2}
+			 end,
+    dfp_read_field_def_m_login_toc(RestF, 0, 0, F@_1,
+				   NewFValue, TrUserData).
+
+skip_varint_m_login_toc(<<1:1, _:7, Rest/binary>>, Z1,
+			Z2, F@_1, F@_2, TrUserData) ->
+    skip_varint_m_login_toc(Rest, Z1, Z2, F@_1, F@_2,
+			    TrUserData);
+skip_varint_m_login_toc(<<0:1, _:7, Rest/binary>>, Z1,
+			Z2, F@_1, F@_2, TrUserData) ->
+    dfp_read_field_def_m_login_toc(Rest, Z1, Z2, F@_1, F@_2,
+				   TrUserData).
+
+skip_length_delimited_m_login_toc(<<1:1, X:7,
+				    Rest/binary>>,
+				  N, Acc, F@_1, F@_2, TrUserData)
+    when N < 57 ->
+    skip_length_delimited_m_login_toc(Rest, N + 7,
+				      X bsl N + Acc, F@_1, F@_2, TrUserData);
+skip_length_delimited_m_login_toc(<<0:1, X:7,
+				    Rest/binary>>,
+				  N, Acc, F@_1, F@_2, TrUserData) ->
+    Length = X bsl N + Acc,
+    <<_:Length/binary, Rest2/binary>> = Rest,
+    dfp_read_field_def_m_login_toc(Rest2, 0, 0, F@_1, F@_2,
+				   TrUserData).
+
+skip_group_m_login_toc(Bin, FNum, Z2, F@_1, F@_2,
+		       TrUserData) ->
+    {_, Rest} = read_group(Bin, FNum),
+    dfp_read_field_def_m_login_toc(Rest, 0, Z2, F@_1, F@_2,
+				   TrUserData).
+
+skip_32_m_login_toc(<<_:32, Rest/binary>>, Z1, Z2, F@_1,
+		    F@_2, TrUserData) ->
+    dfp_read_field_def_m_login_toc(Rest, Z1, Z2, F@_1, F@_2,
+				   TrUserData).
+
+skip_64_m_login_toc(<<_:64, Rest/binary>>, Z1, Z2, F@_1,
+		    F@_2, TrUserData) ->
+    dfp_read_field_def_m_login_toc(Rest, Z1, Z2, F@_1, F@_2,
+				   TrUserData).
+
+d_msg_m_login_tos(Bin, TrUserData) ->
+    dfp_read_field_def_m_login_tos(Bin, 0, 0,
+				   id(undefined, TrUserData), TrUserData).
+
+dfp_read_field_def_m_login_tos(<<8, Rest/binary>>, Z1,
+			       Z2, F@_1, TrUserData) ->
+    d_field_m_login_tos_id(Rest, Z1, Z2, F@_1, TrUserData);
+dfp_read_field_def_m_login_tos(<<>>, 0, 0, F@_1, _) ->
+    #m_login_tos{id = F@_1};
+dfp_read_field_def_m_login_tos(Other, Z1, Z2, F@_1,
+			       TrUserData) ->
+    dg_read_field_def_m_login_tos(Other, Z1, Z2, F@_1,
+				  TrUserData).
+
+dg_read_field_def_m_login_tos(<<1:1, X:7, Rest/binary>>,
+			      N, Acc, F@_1, TrUserData)
+    when N < 32 - 7 ->
+    dg_read_field_def_m_login_tos(Rest, N + 7,
+				  X bsl N + Acc, F@_1, TrUserData);
+dg_read_field_def_m_login_tos(<<0:1, X:7, Rest/binary>>,
+			      N, Acc, F@_1, TrUserData) ->
+    Key = X bsl N + Acc,
+    case Key of
+      8 ->
+	  d_field_m_login_tos_id(Rest, 0, 0, F@_1, TrUserData);
+      _ ->
+	  case Key band 7 of
+	    0 ->
+		skip_varint_m_login_tos(Rest, 0, 0, F@_1, TrUserData);
+	    1 -> skip_64_m_login_tos(Rest, 0, 0, F@_1, TrUserData);
+	    2 ->
+		skip_length_delimited_m_login_tos(Rest, 0, 0, F@_1,
+						  TrUserData);
+	    3 ->
+		skip_group_m_login_tos(Rest, Key bsr 3, 0, F@_1,
+				       TrUserData);
+	    5 -> skip_32_m_login_tos(Rest, 0, 0, F@_1, TrUserData)
+	  end
+    end;
+dg_read_field_def_m_login_tos(<<>>, 0, 0, F@_1, _) ->
+    #m_login_tos{id = F@_1}.
+
+d_field_m_login_tos_id(<<1:1, X:7, Rest/binary>>, N,
+		       Acc, F@_1, TrUserData)
+    when N < 57 ->
+    d_field_m_login_tos_id(Rest, N + 7, X bsl N + Acc, F@_1,
+			   TrUserData);
+d_field_m_login_tos_id(<<0:1, X:7, Rest/binary>>, N,
+		       Acc, _, TrUserData) ->
+    {NewFValue, RestF} = {X bsl N + Acc, Rest},
+    dfp_read_field_def_m_login_tos(RestF, 0, 0, NewFValue,
+				   TrUserData).
+
+skip_varint_m_login_tos(<<1:1, _:7, Rest/binary>>, Z1,
+			Z2, F@_1, TrUserData) ->
+    skip_varint_m_login_tos(Rest, Z1, Z2, F@_1, TrUserData);
+skip_varint_m_login_tos(<<0:1, _:7, Rest/binary>>, Z1,
+			Z2, F@_1, TrUserData) ->
+    dfp_read_field_def_m_login_tos(Rest, Z1, Z2, F@_1,
+				   TrUserData).
+
+skip_length_delimited_m_login_tos(<<1:1, X:7,
+				    Rest/binary>>,
+				  N, Acc, F@_1, TrUserData)
+    when N < 57 ->
+    skip_length_delimited_m_login_tos(Rest, N + 7,
+				      X bsl N + Acc, F@_1, TrUserData);
+skip_length_delimited_m_login_tos(<<0:1, X:7,
+				    Rest/binary>>,
+				  N, Acc, F@_1, TrUserData) ->
+    Length = X bsl N + Acc,
+    <<_:Length/binary, Rest2/binary>> = Rest,
+    dfp_read_field_def_m_login_tos(Rest2, 0, 0, F@_1,
+				   TrUserData).
+
+skip_group_m_login_tos(Bin, FNum, Z2, F@_1,
+		       TrUserData) ->
+    {_, Rest} = read_group(Bin, FNum),
+    dfp_read_field_def_m_login_tos(Rest, 0, Z2, F@_1,
+				   TrUserData).
+
+skip_32_m_login_tos(<<_:32, Rest/binary>>, Z1, Z2, F@_1,
+		    TrUserData) ->
+    dfp_read_field_def_m_login_tos(Rest, Z1, Z2, F@_1,
+				   TrUserData).
+
+skip_64_m_login_tos(<<_:64, Rest/binary>>, Z1, Z2, F@_1,
+		    TrUserData) ->
+    dfp_read_field_def_m_login_tos(Rest, Z1, Z2, F@_1,
+				   TrUserData).
+
 d_msg_msg(Bin, TrUserData) ->
     dfp_read_field_def_msg(Bin, 0, 0, id([], TrUserData),
 			   id(undefined, TrUserData), id(undefined, TrUserData),
@@ -1386,6 +1650,10 @@ merge_msgs(Prev, New, Opts)
       #msg5{} -> merge_msg_msg5(Prev, New, TrUserData);
       #msg4{} -> merge_msg_msg4(Prev, New, TrUserData);
       #msg1{} -> merge_msg_msg1(Prev, New, TrUserData);
+      #m_login_toc{} ->
+	  merge_msg_m_login_toc(Prev, New, TrUserData);
+      #m_login_tos{} ->
+	  merge_msg_m_login_tos(Prev, New, TrUserData);
       #msg{} -> merge_msg_msg(Prev, New, TrUserData);
       #msg3{} -> merge_msg_msg3(Prev, New, TrUserData)
     end.
@@ -1450,6 +1718,14 @@ merge_msg_msg1(#msg1{list = PFlist, opt = PFopt},
 		 true -> NFopt
 	      end}.
 
+merge_msg_m_login_toc(#m_login_toc{},
+		      #m_login_toc{id = NFid, name = NFname}, _) ->
+    #m_login_toc{id = NFid, name = NFname}.
+
+merge_msg_m_login_tos(#m_login_tos{},
+		      #m_login_tos{id = NFid}, _) ->
+    #m_login_tos{id = NFid}.
+
 merge_msg_msg(#msg{list = PFlist, opt = PFopt},
 	      #msg{list = NFlist, int = NFint, opt = NFopt},
 	      TrUserData) ->
@@ -1490,6 +1766,10 @@ verify_msg(Msg, Opts) ->
       #msg5{} -> v_msg_msg5(Msg, [msg5], TrUserData);
       #msg4{} -> v_msg_msg4(Msg, [msg4], TrUserData);
       #msg1{} -> v_msg_msg1(Msg, [msg1], TrUserData);
+      #m_login_toc{} ->
+	  v_msg_m_login_toc(Msg, [m_login_toc], TrUserData);
+      #m_login_tos{} ->
+	  v_msg_m_login_tos(Msg, [m_login_tos], TrUserData);
       #msg{} -> v_msg_msg(Msg, [msg], TrUserData);
       #msg3{} -> v_msg_msg3(Msg, [msg3], TrUserData);
       _ -> mk_type_error(not_a_known_message, Msg, [])
@@ -1556,6 +1836,15 @@ v_msg_msg1(#msg1{list = F1, int = F2, opt = F3}, Path,
     end,
     ok.
 
+v_msg_m_login_toc(#m_login_toc{id = F1, name = F2},
+		  Path, _) ->
+    v_type_uint32(F1, [id | Path]),
+    v_type_string(F2, [name | Path]),
+    ok.
+
+v_msg_m_login_tos(#m_login_tos{id = F1}, Path, _) ->
+    v_type_uint32(F1, [id | Path]), ok.
+
 v_msg_msg(#msg{list = F1, int = F2, opt = F3}, Path,
 	  _) ->
     if is_list(F1) ->
@@ -1595,6 +1884,18 @@ v_type_uint32(N, Path) when is_integer(N) ->
 v_type_uint32(X, Path) ->
     mk_type_error({bad_integer, uint32, unsigned, 32}, X,
 		  Path).
+
+v_type_string(S, Path) when is_list(S); is_binary(S) ->
+    try unicode:characters_to_binary(S) of
+      B when is_binary(B) -> ok;
+      {error, _, _} ->
+	  mk_type_error(bad_unicode_string, S, Path)
+    catch
+      error:badarg ->
+	  mk_type_error(bad_unicode_string, S, Path)
+    end;
+v_type_string(X, Path) ->
+    mk_type_error(bad_unicode_string, X, Path).
 
 -spec mk_type_error(_, _, list()) -> no_return().
 mk_type_error(Error, ValueSeen, Path) ->
@@ -1650,6 +1951,14 @@ get_msg_defs() ->
 	      occurrence = required, opts = []},
        #field{name = opt, fnum = 3, rnum = 4, type = uint32,
 	      occurrence = optional, opts = []}]},
+     {{msg, m_login_toc},
+      [#field{name = id, fnum = 1, rnum = 2, type = uint32,
+	      occurrence = required, opts = []},
+       #field{name = name, fnum = 2, rnum = 3, type = string,
+	      occurrence = required, opts = []}]},
+     {{msg, m_login_tos},
+      [#field{name = id, fnum = 1, rnum = 2, type = uint32,
+	      occurrence = required, opts = []}]},
      {{msg, msg},
       [#field{name = list, fnum = 1, rnum = 2, type = uint32,
 	      occurrence = repeated, opts = []},
@@ -1666,14 +1975,17 @@ get_msg_defs() ->
 	      occurrence = optional, opts = []}]}].
 
 
-get_msg_names() -> [msg2, msg5, msg4, msg1, msg, msg3].
+get_msg_names() ->
+    [msg2, msg5, msg4, msg1, m_login_toc, m_login_tos, msg,
+     msg3].
 
 
 get_group_names() -> [].
 
 
 get_msg_or_group_names() ->
-    [msg2, msg5, msg4, msg1, msg, msg3].
+    [msg2, msg5, msg4, msg1, m_login_toc, m_login_tos, msg,
+     msg3].
 
 
 get_enum_names() -> [].
@@ -1719,6 +2031,14 @@ find_msg_def(msg1) ->
 	    occurrence = required, opts = []},
      #field{name = opt, fnum = 3, rnum = 4, type = uint32,
 	    occurrence = optional, opts = []}];
+find_msg_def(m_login_toc) ->
+    [#field{name = id, fnum = 1, rnum = 2, type = uint32,
+	    occurrence = required, opts = []},
+     #field{name = name, fnum = 2, rnum = 3, type = string,
+	    occurrence = required, opts = []}];
+find_msg_def(m_login_tos) ->
+    [#field{name = id, fnum = 1, rnum = 2, type = uint32,
+	    occurrence = required, opts = []}];
 find_msg_def(msg) ->
     [#field{name = list, fnum = 1, rnum = 2, type = uint32,
 	    occurrence = repeated, opts = []},
